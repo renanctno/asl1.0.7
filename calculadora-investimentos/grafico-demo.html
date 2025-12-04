@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Barras com Labels - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 p-4">
+    <div id="root"></div>
+    
+    <script>
+        const { useState } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } = Recharts;
+
+        function GraficoDemo() {
+            // Dados de exemplo
+            const investments = [
+                { name: 'LCI e LCA', value: 1568.57, returnPercentage: '8.2%' },
+                { name: 'CDB', value: 1562.38, returnPercentage: '7.8%' },
+                { name: 'Tesouro Selic', value: 1559.23, returnPercentage: '7.5%' },
+                { name: 'Fundo DI', value: 1558.26, returnPercentage: '7.5%' },
+                { name: 'Tesouro IPCA+', value: 1527.34, returnPercentage: '5.3%' },
+                { name: 'Poupança', value: 1524.56, returnPercentage: '5.1%' }
+            ];
+
+            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+            const formatCurrency = (value) => {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                }).format(value);
+            };
+
+            return React.createElement('div', { className: 'max-w-7xl mx-auto' }, [
+                React.createElement('h1', { 
+                    key: 'title',
+                    className: 'text-3xl font-bold text-center mb-8 text-gray-800' 
+                }, '🎯 Gráfico de Barras com Labels de Rentabilidade'),
+
+                React.createElement('div', { 
+                    key: 'chart-card',
+                    className: 'card p-6 mb-8' 
+                }, [
+                    React.createElement('h3', { 
+                        key: 'chart-title',
+                        className: 'text-xl font-bold text-center text-gray-800 mb-2' 
+                    }, 'Rentabilidade Final por Investimento'),
+                    React.createElement('p', { 
+                        key: 'chart-subtitle',
+                        className: 'text-center text-gray-600 text-sm mb-6' 
+                    }, 'Valores de rentabilidade exibidos diretamente nas barras'),
+                    React.createElement('div', { 
+                        key: 'chart-container',
+                        className: 'h-96' 
+                    }, React.createElement(ResponsiveContainer, { width: '100%', height: '100%' }, 
+                        React.createElement(BarChart, { 
+                            data: investments,
+                            margin: { top: 40, right: 30, left: 20, bottom: 60 }
+                        }, [
+                            React.createElement(CartesianGrid, { 
+                                key: 'grid',
+                                strokeDasharray: '3 3', 
+                                stroke: '#e0e0e0' 
+                            }),
+                            React.createElement(XAxis, { 
+                                key: 'xaxis',
+                                dataKey: 'name', 
+                                angle: -45,
+                                textAnchor: 'end',
+                                height: 100,
+                                tick: { fill: '#374151', fontSize: 12 }
+                            }),
+                            React.createElement(YAxis, { 
+                                key: 'yaxis',
+                                tick: { fill: '#374151', fontSize: 12 },
+                                tickFormatter: (value) => `R$${value.toLocaleString('pt-BR')}`
+                            }),
+                            React.createElement(Tooltip, { 
+                                key: 'tooltip',
+                                formatter: (value) => [formatCurrency(value), 'Valor Final'],
+                                contentStyle: { 
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                },
+                                labelStyle: { color: '#111827', fontWeight: 'bold' }
+                            }),
+                            React.createElement(Bar, { 
+                                key: 'bar',
+                                dataKey: 'value', 
+                                radius: [8, 8, 0, 0]
+                            }, [
+                                React.createElement(LabelList, { 
+                                    key: 'labels',
+                                    dataKey: 'returnPercentage',
+                                    position: 'center',
+                                    style: { 
+                                        fill: '#ffffff', 
+                                        fontWeight: 'bold', 
+                                        fontSize: '16px',
+                                        textAnchor: 'middle'
+                                    }
+                                }),
+                                investments.map((entry, index) => 
+                                    React.createElement(Cell, { 
+                                        key: `cell-${index}`, 
+                                        fill: colors[index] 
+                                    })
+                                )
+                            ])
+                        ])
+                    )),
+                    
+                    React.createElement('div', { 
+                        key: 'legend',
+                        className: 'mt-8 p-4 bg-blue-50 rounded-lg' 
+                    }, [
+                        React.createElement('h4', { 
+                            key: 'legend-title',
+                            className: 'font-semibold text-blue-900 mb-2' 
+                        }, '✨ Novidade Implementada:'),
+                        React.createElement('ul', { 
+                            key: 'legend-list',
+                            className: 'text-sm text-blue-800 space-y-1' 
+                        }, [
+                            '• Labels de rentabilidade diretamente nas barras',
+                            '• Texto em branco e bold para máximo contraste',
+                            '• Posicionamento centralizado em cada barra',
+                            '• Valores percentuais de retorno visíveis',
+                            '• Cores vibrantes para cada investimento'
+                        ].map((item, i) => 
+                            React.createElement('li', { key: i }, item)
+                        ))
+                    ])
+                ])
+            ]);
+        }
+
+        ReactDOM.render(React.createElement(GraficoDemo), document.getElementById('root'));
+    </script>
+</body>
+</html>

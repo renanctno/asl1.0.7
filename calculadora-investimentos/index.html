@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Investimentos - Valores nas Barras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
+        .input { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+        .btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; }
+        .btn:hover { background: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4">
+    <div id="root"></div>
+    
+    <script>
+        const { useState } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } = Recharts;
+
+        function Calculadora() {
+            const [initialInvestment, setInitialInvestment] = useState('1000');
+            const [monthlyInvestment, setMonthlyInvestment] = useState('50');
+            const [period, setPeriod] = useState('9');
+
+            const rates = {
+                selic: 14.90,
+                cdi: 14.90,
+                ipca: 4.10,
+                tr: 0.1723,
+                tesouroPrefixado: 14.00,
+                tesouroCustodia: 0.20,
+                tesouroIPCA: 6.50,
+                fundoDIAdmin: 0.25,
+                cdbRentabilidade: 100,
+                fundoDIRentabilidade: 98.17,
+                lciLcaRentabilidade: 85,
+                poupancaRentabilidade: 0.6732
+            };
+
+            const totalInvested = parseFloat(initialInvestment) + (parseFloat(monthlyInvestment) * parseFloat(period));
+
+            const calculateIRRate = (months) => {
+                if (months < 6) return 22.5;
+                if (months < 12) return 20.0;
+                if (months < 24) return 17.5;
+                return 15.0;
+            };
+
+            const calculateInvestment = (principal, monthlyContribution, months, annualRate, irTaxFree = false, custodyFee = 0) => {
+                const monthlyRate = annualRate / 100 / 12;
+                const monthlyCustodyFee = custodyFee / 100 / 12;
+                let total = principal;
+                let totalContributions = principal;
+                
+                for (let i = 1; i <= months; i++) {
+                    total = total * (1 + monthlyRate - monthlyCustodyFee) + monthlyContribution;
+                    totalContributions += monthlyContribution;
+                }
+                
+                if (!irTaxFree && total > totalContributions) {
+                    const gains = total - totalContributions;
+                    const irRate = calculateIRRate(months) / 100;
+                    const irTax = gains * irRate;
+                    total = total - irTax;
+                }
+                
+                return total;
+            };
+
+            const effectiveRates = {
+                lciLca: (rates.cdi * rates.lciLcaRentabilidade) / 100,
+                cdb: (rates.cdi * rates.cdbRentabilidade) / 100,
+                tesouroSelic: rates.selic - rates.tesouroCustodia,
+                tesouroIPCA: rates.ipca + rates.tesouroIPCA,
+                fundoDI: (rates.cdi * rates.fundoDIRentabilidade) / 100 - rates.fundoDIAdmin,
+                poupanca: rates.poupancaRentabilidade * 12
+            };
+
+            const investments = [
+                { 
+                    name: 'LCI e LCA', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.lciLca, true),
+                    rate: effectiveRates.lciLca,
+                    irTaxFree: true
+                },
+                { 
+                    name: 'CDB', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.cdb),
+                    rate: effectiveRates.cdb,
+                    irTaxFree: false
+                },
+                { 
+                    name: 'Tesouro Selic', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.tesouroSelic, false, rates.tesouroCustodia),
+                    rate: effectiveRates.tesouroSelic,
+                    irTaxFree: false,
+                    custodyFee: rates.tesouroCustodia
+                },
+                { 
+                    name: 'Tesouro IPCA+', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.tesouroIPCA, false, rates.tesouroCustodia),
+                    rate: effectiveRates.tesouroIPCA,
+                    irTaxFree: false,
+                    custodyFee: rates.tesouroCustodia
+                },
+                { 
+                    name: 'Fundo DI', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.fundoDI),
+                    rate: effectiveRates.fundoDI,
+                    irTaxFree: false
+                },
+                { 
+                    name: 'Poupança', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.poupanca, true),
+                    rate: effectiveRates.poupanca,
+                    irTaxFree: true
+                }
+            ];
+
+            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+            const formatCurrency = (value) => {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                }).format(value);
+            };
+
+            return React.createElement('div', { className: 'max-w-7xl mx-auto' }, [
+                React.createElement('h1', { 
+                    key: 'title',
+                    className: 'text-3xl font-bold text-center mb-8 text-gray-800' 
+                }, '🎯 Calculadora com Valores nas Barras'),
+
+                React.createElement('div', { 
+                    key: 'chart-card',
+                    className: 'card p-6 mb-8' 
+                }, [
+                    React.createElement('h3', { 
+                        key: 'chart-title',
+                        className: 'text-xl font-bold text-center text-gray-800 mb-2' 
+                    }, 'Rentabilidade Final por Investimento'),
+                    React.createElement('p', { 
+                        key: 'chart-subtitle',
+                        className: 'text-center text-gray-600 text-sm mb-6' 
+                    }, `Valores em reais exibidos diretamente nas barras coloridas`),
+                    React.createElement('div', { 
+                        key: 'chart-container',
+                        className: 'h-96' 
+                    }, React.createElement(ResponsiveContainer, { width: '100%', height: '100%' }, 
+                        React.createElement(BarChart, { 
+                            data: investments.map(inv => ({
+                                ...inv,
+                                valueFormatted: formatCurrency(inv.value)
+                            })),
+                            margin: { top: 40, right: 30, left: 20, bottom: 60 }
+                        }, [
+                            React.createElement(CartesianGrid, { 
+                                key: 'grid',
+                                strokeDasharray: '3 3', 
+                                stroke: '#e0e0e0' 
+                            }),
+                            React.createElement(XAxis, { 
+                                key: 'xaxis',
+                                dataKey: 'name', 
+                                angle: -45,
+                                textAnchor: 'end',
+                                height: 100,
+                                tick: { fill: '#374151', fontSize: 12 }
+                            }),
+                            React.createElement(YAxis, { 
+                                key: 'yaxis',
+                                tick: { fill: '#374151', fontSize: 12 },
+                                tickFormatter: (value) => `R$${value.toLocaleString('pt-BR')}`
+                            }),
+                            React.createElement(Tooltip, { 
+                                key: 'tooltip',
+                                formatter: (value) => [formatCurrency(value), 'Valor Final'],
+                                contentStyle: { 
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                },
+                                labelStyle: { color: '#111827', fontWeight: 'bold' }
+                            }),
+                            React.createElement(Bar, { 
+                                key: 'bar',
+                                dataKey: 'value', 
+                                radius: [8, 8, 0, 0]
+                            }, [
+                                React.createElement(LabelList, { 
+                                    key: 'labels',
+                                    dataKey: 'valueFormatted',
+                                    position: 'center',
+                                    style: { 
+                                        fill: '#ffffff', 
+                                        fontWeight: 'bold', 
+                                        fontSize: '12px',
+                                        textAnchor: 'middle'
+                                    }
+                                }),
+                                investments.map((entry, index) => 
+                                    React.createElement(Cell, { 
+                                        key: `cell-${index}`, 
+                                        fill: colors[index] 
+                                    })
+                                )
+                            ])
+                        ])
+                    )),
+                    
+                    React.createElement('div', { 
+                        key: 'legend',
+                        className: 'mt-8 p-4 bg-green-50 rounded-lg' 
+                    }, [
+                        React.createElement('h4', { 
+                            key: 'legend-title',
+                            className: 'font-semibold text-green-900 mb-2' 
+                        }, '✅ Valores nas Barras Implementados!'),
+                        React.createElement('ul', { 
+                            key: 'legend-list',
+                            className: 'text-sm text-green-800 space-y-1' 
+                        }, [
+                            '• Valores em reais (R$) diretamente nas barras',
+                            '• Texto branco e bold para máximo contraste',
+                            '• Posicionamento centralizado em cada barra',
+                            '• Exemplo: "R$ 1.568,57" na barra verde',
+                            '• Aplicação reiniciada e funcionando!'
+                        ].map((item, i) => 
+                            React.createElement('li', { key: i }, item)
+                        ))
+                    ])
+                ])
+            ]);
+        }
+
+        ReactDOM.render(React.createElement(Calculadora), document.getElementById('root'));
+    </script>
+</body>
+</html>

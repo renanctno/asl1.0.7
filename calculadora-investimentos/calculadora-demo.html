@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Investimentos - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
+        .input { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+        .btn { background: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; }
+        .btn:hover { background: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4">
+    <div id="root"></div>
+    
+    <script>
+        const { useState } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } = Recharts;
+
+        function Calculadora() {
+            const [initialInvestment, setInitialInvestment] = useState('1000');
+            const [monthlyInvestment, setMonthlyInvestment] = useState('50');
+            const [period, setPeriod] = useState('9');
+            const [showChart, setShowChart] = useState(false);
+
+            const rates = {
+                selic: 14.90,
+                cdi: 14.90,
+                ipca: 4.10,
+                tr: 0.1723,
+                tesouroPrefixado: 14.00,
+                tesouroCustodia: 0.20,
+                tesouroIPCA: 6.50,
+                fundoDIAdmin: 0.25,
+                cdbRentabilidade: 100,
+                fundoDIRentabilidade: 98.17,
+                lciLcaRentabilidade: 85,
+                poupancaRentabilidade: 0.6732
+            };
+
+            const totalInvested = parseFloat(initialInvestment) + (parseFloat(monthlyInvestment) * parseFloat(period));
+
+            const calculateIRRate = (months) => {
+                if (months < 6) return 22.5;
+                if (months < 12) return 20.0;
+                if (months < 24) return 17.5;
+                return 15.0;
+            };
+
+            const calculateInvestment = (principal, monthlyContribution, months, annualRate, irTaxFree = false, custodyFee = 0) => {
+                const monthlyRate = annualRate / 100 / 12;
+                const monthlyCustodyFee = custodyFee / 100 / 12;
+                let total = principal;
+                let totalContributions = principal;
+                
+                for (let i = 1; i <= months; i++) {
+                    total = total * (1 + monthlyRate - monthlyCustodyFee) + monthlyContribution;
+                    totalContributions += monthlyContribution;
+                }
+                
+                if (!irTaxFree && total > totalContributions) {
+                    const gains = total - totalContributions;
+                    const irRate = calculateIRRate(months) / 100;
+                    const irTax = gains * irRate;
+                    total = total - irTax;
+                }
+                
+                return total;
+            };
+
+            const effectiveRates = {
+                lciLca: (rates.cdi * rates.lciLcaRentabilidade) / 100,
+                cdb: (rates.cdi * rates.cdbRentabilidade) / 100,
+                tesouroSelic: rates.selic - rates.tesouroCustodia,
+                tesouroIPCA: rates.ipca + rates.tesouroIPCA,
+                fundoDI: (rates.cdi * rates.fundoDIRentabilidade) / 100 - rates.fundoDIAdmin,
+                poupanca: rates.poupancaRentabilidade * 12
+            };
+
+            const investments = [
+                { 
+                    name: 'LCI e LCA', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.lciLca, true),
+                    rate: effectiveRates.lciLca,
+                    irTaxFree: true
+                },
+                { 
+                    name: 'CDB', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.cdb),
+                    rate: effectiveRates.cdb,
+                    irTaxFree: false
+                },
+                { 
+                    name: 'Tesouro Selic', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.tesouroSelic, false, rates.tesouroCustodia),
+                    rate: effectiveRates.tesouroSelic,
+                    irTaxFree: false,
+                    custodyFee: rates.tesouroCustodia
+                },
+                { 
+                    name: 'Tesouro IPCA+', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.tesouroIPCA, false, rates.tesouroCustodia),
+                    rate: effectiveRates.tesouroIPCA,
+                    irTaxFree: false,
+                    custodyFee: rates.tesouroCustodia
+                },
+                { 
+                    name: 'Fundo DI', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.fundoDI),
+                    rate: effectiveRates.fundoDI,
+                    irTaxFree: false
+                },
+                { 
+                    name: 'Poupança', 
+                    value: calculateInvestment(parseFloat(initialInvestment), parseFloat(monthlyInvestment), parseFloat(period), effectiveRates.poupanca, true),
+                    rate: effectiveRates.poupanca,
+                    irTaxFree: true
+                }
+            ];
+
+            const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+            const formatCurrency = (value) => {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                }).format(value);
+            };
+
+            return React.createElement('div', { className: 'max-w-7xl mx-auto' }, [
+                React.createElement('h1', { 
+                    key: 'title',
+                    className: 'text-3xl font-bold text-center mb-8 text-gray-800' 
+                }, 'Qual aplicação rende mais?'),
+
+                React.createElement('div', { 
+                    key: 'grid',
+                    className: 'grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8' 
+                }, [
+                    // Card de Inputs
+                    React.createElement('div', { 
+                        key: 'inputs',
+                        className: 'card p-6' 
+                    }, [
+                        React.createElement('h3', { 
+                            key: 'inputs-title',
+                            className: 'text-xl font-semibold mb-4' 
+                        }, 'Parâmetros de Investimento'),
+                        React.createElement('div', { key: 'input-group', className: 'space-y-4' }, [
+                            React.createElement('div', { key: 'initial-div' }, [
+                                React.createElement('label', { 
+                                    key: 'initial-label',
+                                    className: 'block text-sm font-medium mb-1' 
+                                }, 'Investimento Inicial (R$)'),
+                                React.createElement('input', {
+                                    key: 'initial-input',
+                                    type: 'number',
+                                    value: initialInvestment,
+                                    onChange: (e) => setInitialInvestment(e.target.value),
+                                    className: 'input w-full mt-1'
+                                })
+                            ]),
+                            React.createElement('div', { key: 'monthly-div' }, [
+                                React.createElement('label', { 
+                                    key: 'monthly-label',
+                                    className: 'block text-sm font-medium mb-1' 
+                                }, 'Investimento Mensal (R$)'),
+                                React.createElement('input', {
+                                    key: 'monthly-input',
+                                    type: 'number',
+                                    value: monthlyInvestment,
+                                    onChange: (e) => setMonthlyInvestment(e.target.value),
+                                    className: 'input w-full mt-1'
+                                })
+                            ]),
+                            React.createElement('div', { key: 'period-div' }, [
+                                React.createElement('label', { 
+                                    key: 'period-label',
+                                    className: 'block text-sm font-medium mb-1' 
+                                }, 'Período (meses)'),
+                                React.createElement('input', {
+                                    key: 'period-input',
+                                    type: 'number',
+                                    value: period,
+                                    onChange: (e) => setPeriod(e.target.value),
+                                    className: 'input w-full mt-1'
+                                })
+                            ]),
+                            React.createElement('div', { 
+                                key: 'total',
+                                className: 'pt-4 border-t' 
+                            }, [
+                                React.createElement('p', { 
+                                    key: 'total-text',
+                                    className: 'text-lg font-semibold' 
+                                }, `Total Investido: ${formatCurrency(totalInvested)}`)
+                            ])
+                        ])
+                    ]),
+
+                    // Card de Taxas
+                    React.createElement('div', { 
+                        key: 'rates',
+                        className: 'card p-6' 
+                    }, [
+                        React.createElement('h3', { 
+                            key: 'rates-title',
+                            className: 'text-xl font-semibold mb-4' 
+                        }, 'Indicadores de Taxa'),
+                        React.createElement('div', { 
+                            key: 'rates-content',
+                            className: 'space-y-3 text-sm' 
+                        }, [
+                            React.createElement('div', { key: 'ref-rates' }, [
+                                React.createElement('h4', { 
+                                    key: 'ref-title',
+                                    className: 'font-medium mb-2' 
+                                }, 'Taxas de Referência'),
+                                React.createElement('div', { 
+                                    key: 'ref-grid',
+                                    className: 'grid grid-cols-2 gap-2' 
+                                }, [
+                                    `Selic: ${rates.selic}% a.a.`,
+                                    `CDI: ${rates.cdi}% a.a.`,
+                                    `IPCA: ${rates.ipca}% a.a.`,
+                                    `TR: ${rates.tr}% a.m.`
+                                ].map((text, i) => 
+                                    React.createElement('div', { 
+                                        key: `ref-${i}`,
+                                        className: 'bg-gray-50 p-2 rounded' 
+                                    }, text)
+                                ))
+                            ]),
+                            React.createElement('div', { key: 'rentability' }, [
+                                React.createElement('h4', { 
+                                    key: 'rent-title',
+                                    className: 'font-medium mb-2' 
+                                }, 'Rentabilidade'),
+                                React.createElement('div', { 
+                                    key: 'rent-grid',
+                                    className: 'grid grid-cols-2 gap-2' 
+                                }, [
+                                    `CDB: ${rates.cdbRentabilidade}% CDI`,
+                                    `Fundo DI: ${rates.fundoDIRentabilidade}% CDI`,
+                                    `LCI/LCA: ${rates.lciLcaRentabilidade}% CDI`,
+                                    `Poupança: ${rates.poupancaRentabilidade}% a.m.`
+                                ].map((text, i) => 
+                                    React.createElement('div', { 
+                                        key: `rent-${i}`,
+                                        className: 'bg-gray-50 p-2 rounded' 
+                                    }, text)
+                                ))
+                            ])
+                        ])
+                    ]),
+
+                    // Card de Resultados
+                    React.createElement('div', { 
+                        key: 'results',
+                        className: 'card p-6' 
+                    }, [
+                        React.createElement('h3', { 
+                            key: 'results-title',
+                            className: 'text-xl font-semibold mb-4' 
+                        }, 'Melhores Opções de Investimento'),
+                        React.createElement('div', { 
+                            key: 'results-list',
+                            className: 'space-y-3' 
+                        }, investments.map((inv, index) => 
+                            React.createElement('div', { 
+                                key: inv.name,
+                                className: 'flex justify-between items-center p-3 bg-gray-50 rounded-lg' 
+                            }, [
+                                React.createElement('div', { 
+                                    key: 'left',
+                                    className: 'flex items-center gap-2' 
+                                }, [
+                                    React.createElement('div', {
+                                        key: 'color',
+                                        className: 'w-3 h-3 rounded-full',
+                                        style: { backgroundColor: colors[index] }
+                                    }),
+                                    React.createElement('span', { 
+                                        key: 'name',
+                                        className: 'font-medium' 
+                                    }, inv.name),
+                                    inv.irTaxFree && React.createElement('span', {
+                                        key: 'ir-free',
+                                        className: 'ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded'
+                                    }, 'Isento IR')
+                                ]),
+                                React.createElement('div', { 
+                                    key: 'right',
+                                    className: 'text-right' 
+                                }, [
+                                    React.createElement('div', { 
+                                        key: 'value',
+                                        className: 'font-bold text-green-600' 
+                                    }, formatCurrency(inv.value)),
+                                    React.createElement('div', { 
+                                        key: 'rate',
+                                        className: 'text-xs text-gray-500' 
+                                    }, `${inv.rate.toFixed(2)}% a.a.`)
+                                ])
+                            ])
+                        )),
+                        React.createElement('button', {
+                            key: 'btn',
+                            className: 'btn w-full mt-4',
+                            onClick: () => setShowChart(!showChart)
+                        }, showChart ? 'Ocultar Simulação' : 'Ver Simulação')
+                    ])
+                ]),
+
+                // Gráfico de Barras
+                React.createElement('div', { 
+                    key: 'barchart',
+                    className: 'card p-6 mb-8' 
+                }, [
+                    React.createElement('h3', { 
+                        key: 'chart-title',
+                        className: 'text-xl font-bold text-center text-gray-800 mb-2' 
+                    }, '🎯 Rentabilidade Final por Investimento'),
+                    React.createElement('p', { 
+                        key: 'chart-subtitle',
+                        className: 'text-center text-gray-600 text-sm mb-6' 
+                    }, `Comparativo do valor final acumulado de cada investimento após ${period} meses`),
+                    React.createElement('div', { 
+                        key: 'chart-container',
+                        className: 'h-80' 
+                    }, React.createElement(ResponsiveContainer, { width: '100%', height: '100%' }, 
+                        React.createElement(BarChart, { 
+                            data: investments.map(inv => ({
+                                ...inv,
+                                displayValue: formatCurrency(inv.value),
+                                valueFormatted: formatCurrency(inv.value)
+                            })),
+                            margin: { top: 40, right: 30, left: 20, bottom: 60 }
+                        }, [
+                            React.createElement(CartesianGrid, { 
+                                key: 'grid',
+                                strokeDasharray: '3 3', 
+                                stroke: '#e0e0e0' 
+                            }),
+                            React.createElement(XAxis, { 
+                                key: 'xaxis',
+                                dataKey: 'name', 
+                                angle: -45,
+                                textAnchor: 'end',
+                                height: 100,
+                                tick: { fill: '#374151', fontSize: 12 }
+                            }),
+                            React.createElement(YAxis, { 
+                                key: 'yaxis',
+                                tick: { fill: '#374151', fontSize: 12 },
+                                tickFormatter: (value) => `R$${value.toLocaleString('pt-BR')}`
+                            }),
+                            React.createElement(Tooltip, { 
+                                key: 'tooltip',
+                                formatter: (value) => [formatCurrency(value), 'Valor Final'],
+                                contentStyle: { 
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                },
+                                labelStyle: { color: '#111827', fontWeight: 'bold' }
+                            }),
+                            React.createElement(Bar, { 
+                                key: 'bar',
+                                dataKey: 'value', 
+                                radius: [8, 8, 0, 0]
+                            }, [
+                                React.createElement(LabelList, { 
+                                    key: 'labels',
+                                    dataKey: 'valueFormatted',
+                                    position: 'center',
+                                    style: { 
+                                        fill: '#ffffff', 
+                                        fontWeight: 'bold', 
+                                        fontSize: '12px',
+                                        textAnchor: 'middle'
+                                    }
+                                }),
+                                investments.map((entry, index) => 
+                                    React.createElement(Cell, { 
+                                        key: `cell-${index}`, 
+                                        fill: colors[index] 
+                                    })
+                                )
+                            ])
+                        ])
+                    )),
+                    React.createElement('div', { 
+                        key: 'indicators',
+                        className: 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-6' 
+                    }, investments.map((inv, index) => 
+                        React.createElement('div', { 
+                            key: inv.name,
+                            className: 'text-center p-3 rounded-lg border-2',
+                            style: { 
+                                borderColor: colors[index],
+                                backgroundColor: `${colors[index]}10`
+                            }
+                        }, [
+                            React.createElement('div', {
+                                key: 'color-dot',
+                                className: 'w-4 h-4 rounded-full mx-auto mb-2',
+                                style: { backgroundColor: colors[index] }
+                            }),
+                            React.createElement('p', { 
+                                key: 'inv-name',
+                                className: 'text-xs font-semibold text-gray-700' 
+                            }, inv.name),
+                            React.createElement('p', { 
+                                key: 'inv-value',
+                                className: 'text-sm font-bold',
+                                style: { color: colors[index] }
+                            }, formatCurrency(inv.value)),
+                            React.createElement('p', { 
+                                key: 'inv-return',
+                                className: 'text-xs text-gray-600' 
+                            }, `${((inv.value - totalInvested) / totalInvested * 100).toFixed(1)}% retorno`)
+                        ])
+                    ))
+                ])
+            ]);
+        }
+
+        ReactDOM.render(React.createElement(Calculadora), document.getElementById('root'));
+    </script>
+</body>
+</html>
